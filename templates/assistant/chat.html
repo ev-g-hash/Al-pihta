@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ИИ-помощник юриста</title>
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v={{ STATIC_VERSION }}">
 </head>
 <body>
     <div class="app">
@@ -51,6 +51,6 @@
     <script id="initial-history" type="application/json">{{ history_json|safe }}</script>
     <script id="ocr-ready" type="application/json">{{ ocr_ready|yesno:"true,false" }}</script>
 
-    <script src="{% static 'js/chat.js' %}"></script>
+    <script src="{% static 'js/chat.js' %}?v={{ STATIC_VERSION }}"></script>
 </body>
 </html>

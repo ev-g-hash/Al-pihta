@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import codecs
 import io
 import logging
 import shutil
@@ -47,6 +48,10 @@ KIND_LABELS = {
 EMPTY_TEXT_NOTICE = "(в файле не обнаружено распознаваемого текста)"
 OCR_UNAVAILABLE_NOTICE = (
     "(текст с изображения не распознан: OCR-движок Tesseract не установлен)"
+)
+SCANNED_PDF_NOTICE = (
+    "(в PDF нет текстового слоя — это скан или фото; распознавание недоступно: "
+    "OCR-движок Tesseract не установлен)"
 )
 
 
@@ -99,7 +104,13 @@ def _read_pdf(data: bytes) -> str:
         except Exception as exc:  # повреждённая страница не должна рвать весь файл
             logger.info("Не удалось разобрать страницу PDF: %s", exc)
             pages.append("")
-    return "\n".join(pages)
+    text = "\n".join(pages).strip()
+    # Скан-копии и фото документов, сохранённые в PDF, не содержат текстового
+    # слоя: pypdf возвращает пустоту. Без объяснения это выглядело бы как
+    # «файл не читается», поэтому различаем эти случаи явно.
+    if not text:
+        return SCANNED_PDF_NOTICE if not ocr_available() else EMPTY_TEXT_NOTICE
+    return text
 
 
 def _read_docx(data: bytes) -> str:
@@ -118,8 +129,25 @@ def _read_docx(data: bytes) -> str:
 
 
 def _read_text(data: bytes) -> str:
+    # Порядок важен: BOM определяем явно, иначе UTF-16 декодируется в «кашу» —
+    # utf-8 и cp1251 принимают почти любые байты, поэтому их проверка не спасает.
+    if data.startswith(codecs.BOM_UTF8):
+        return data.decode("utf-8-sig")
+    if data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        return data.decode("utf-16")
+    # UTF-16 без BOM: у латиницы и кириллицы в этом коде каждый второй байт —
+    # ноль. Такого в однобайтовых кодировках не бывает, так что признак надёжный.
+    if len(data) >= 16:
+        sample = data[: len(data) - len(data) % 2]
+        zeros = sample.count(b"\x00")
+        if zeros and zeros >= len(sample) * 0.25 and zeros % 2 == 0:
+            encoding = "utf-16-le" if sample[1::2].count(b"\x00") > sample[::2].count(b"\x00") else "utf-16-be"
+            try:
+                return sample.decode(encoding)
+            except UnicodeDecodeError:
+                pass
     # Перебор кодировок: документы из бухгалтерий и госорганов часто в cp1251.
-    for encoding in ("utf-8-sig", "utf-8", "cp1251", "cp866"):
+    for encoding in ("utf-8", "cp1251", "cp866"):
         try:
             return data.decode(encoding)
         except UnicodeDecodeError:
