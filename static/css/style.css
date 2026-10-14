@@ -1,0 +1,379 @@
+:root {
+    --bg: #dbeafe;
+    --bg-secondary: #eff6ff;
+    --surface: #f5faff;
+    --border: #bfdbfe;
+    --text: #0c2d48;
+    --text-secondary: #4b6b88;
+    --accent: #0ea5e9;
+    --accent-hover: #38bdf8;
+    --user-bubble: #0ea5e9;
+    --assistant-bubble: #e0f2fe;
+    --input-bg: #ffffff;
+    --input-focus: #0ea5e9;
+}
+
+* { box-sizing: border-box; }
+
+/* Атрибут hidden должен побеждать display:flex у ленты чата. */
+[hidden] { display: none !important; }
+
+html, body { height: 100%; }
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    /* Прокрутка принадлежит ленте чата, а не окну: иначе после вставки ответа
+       браузер прокручивает всю страницу и кажется, что переписка «уезжает». */
+    overflow: hidden;
+}
+
+.app {
+    max-width: 860px;
+    margin: 0 auto;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    gap: 12px;
+    overflow: hidden;
+}
+
+/* ===== Шапка ===== */
+.app-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 20px;
+}
+
+.app-header h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.app-header__subtitle {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.btn--ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 13px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn--ghost:hover {
+    border-color: var(--text-secondary);
+    color: var(--text);
+}
+
+/* ===== Сцена: область между шапкой и полем ввода ===== */
+.stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+}
+
+/* ===== Пустой экран (приветствие) ===== */
+.chat__empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 12px;
+    padding: 20px;
+}
+
+.chat__empty p:first-child {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: var(--text);
+}
+
+.chat__hint {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-style: italic;
+    max-width: 500px;
+}
+
+/* ===== Лента чата ===== */
+.chat {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* scroll-behavior: smooth здесь не ставим: плачная прокрутка превращает
+       вставку нового ответа в «полёт» по ленте. Прокруткой управляет JS. */
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* ===== Сообщения ===== */
+.message { display: flex; }
+.message--user { justify-content: flex-end; }
+.message--assistant { justify-content: flex-start; }
+
+.message--user,
+.message--assistant {
+    display: flex;
+    flex-direction: column;
+}
+
+.message--user { align-items: flex-end; }
+.message--assistant { align-items: flex-start; }
+
+.message__bubble {
+    max-width: 78%;
+    padding: 12px 16px;
+    border-radius: 14px;
+    line-height: 1.5;
+    overflow-wrap: break-word;
+    /* Ответ модели приходит готовым текстом с переносами строк — сохраняем их как есть. */
+    white-space: pre-wrap;
+}
+
+.message--user .message__bubble {
+    background: var(--user-bubble);
+    color: #ffffff;
+    border-bottom-right-radius: 4px;
+}
+
+.message--assistant .message__bubble {
+    background: var(--assistant-bubble);
+    color: var(--text);
+    border-bottom-left-radius: 4px;
+}
+
+/* Индикатор того, что ассистент готовит ответ. */
+.typing {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 18px;
+}
+
+.typing span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    animation: typing-blink 1.2s infinite ease-in-out;
+}
+
+.typing span:nth-child(2) { animation-delay: 0.18s; }
+.typing span:nth-child(3) { animation-delay: 0.36s; }
+
+@keyframes typing-blink {
+    0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* ===== Ошибка ===== */
+.alert {
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    color: #a1231f;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* ===== Кнопка «к концу диалога» ===== */
+.scroll-down {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--accent);
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(12, 45, 72, 0.18);
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.scroll-down:hover {
+    background: var(--bg-secondary);
+    transform: translateX(-50%) translateY(-2px);
+}
+
+/* ===== Строка ввода (composer) ===== */
+.composer {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+.composer__row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    padding: 6px 8px 6px 18px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.composer__row:focus-within {
+    border-color: var(--input-focus);
+    box-shadow: 0 0 0 1px var(--input-focus);
+}
+
+.composer__input {
+    flex: 1;
+    resize: none;
+    border: none;
+    padding: 10px 0;
+    font-family: inherit;
+    font-size: 15px;
+    line-height: 1.4;
+    background: transparent;
+    color: var(--text);
+    max-height: 160px;
+}
+
+.composer__input::placeholder { color: var(--text-secondary); }
+.composer__input:focus { outline: none; }
+
+/* ===== Кнопки-иконки в строке ввода ===== */
+.composer__actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.composer__actions button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    font-size: 18px;
+    color: var(--text-secondary);
+    transition: background 0.15s ease, color 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.composer__actions button:hover:not(:disabled) {
+    background: rgba(14, 165, 233, 0.12);
+    color: var(--accent);
+}
+
+.composer__actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* ===== Акцентная кнопка отправки ===== */
+.btn--primary {
+    background: var(--accent);
+    color: #ffffff;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+/* ===== Источники ===== */
+.sources {
+    max-width: 78%;
+    margin-top: 8px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+}
+
+.sources__title {
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.sources__list {
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sources__item {
+    display: flex;
+    gap: 6px;
+    line-height: 1.4;
+}
+
+.sources__num {
+    color: var(--accent);
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.sources__item a {
+    color: var(--accent);
+    text-decoration: none;
+    overflow-wrap: break-word;
+}
+
+.sources__item a:hover { text-decoration: underline; }
+
+/* ===== Адаптив ===== */
+@media (max-width: 600px) {
+    .app { padding: 8px; gap: 8px; }
+    .chat__empty p:first-child { font-size: 22px; }
+    .message__bubble,
+    .sources { max-width: 92%; }
+}

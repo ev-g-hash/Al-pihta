@@ -1,0 +1,50 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ИИ-помощник юриста</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <div class="app">
+        <header class="app-header">
+            <div class="app-header__title">
+                <h1>ИИ-помощник юриста</h1>
+                <p class="app-header__subtitle">Право Российской Федерации · справочная информация</p>
+            </div>
+            <button type="button" id="clear-btn" class="btn--ghost" hidden>Очистить</button>
+        </header>
+
+        <div class="stage">
+            <div class="chat__empty" id="empty-state">
+                <p>Привет, Евгений! Какие дела?</p>
+                <p class="chat__hint">Опишите вашу правовую ситуацию или задайте вопрос.</p>
+            </div>
+
+            <main class="chat" id="chat" hidden></main>
+
+            <button type="button" class="scroll-down" id="scroll-down" hidden aria-label="К концу диалога">↓</button>
+        </div>
+
+        <form class="composer" id="composer">
+            <div class="composer__row">
+                <input type="text" name="message" class="composer__input" id="input"
+                       placeholder="Спросите о праве..." autocomplete="off">
+                <div class="composer__actions">
+                    <button type="button" title="Прикрепить файл" aria-label="Прикрепить файл">📎</button>
+                    <button type="button" title="Голосовой ввод" aria-label="Голосовой ввод">🎤</button>
+                    <button type="submit" class="btn--primary btn--icon" id="send-btn"
+                            title="Отправить" aria-label="Отправить">➤</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Старая переписка приходит с сервера и рисуется тем же кодом, что и новые сообщения. -->
+    <script id="initial-history" type="application/json">{{ history_json|safe }}</script>
+
+    <script src="{% static 'js/chat.js' %}"></script>
+</body>
+</html>
