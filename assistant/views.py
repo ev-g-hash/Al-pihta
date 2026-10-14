@@ -9,8 +9,9 @@ from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
-from .services import pipeline
+from .services import file_reader, pipeline
 from .services.crawler import Source
+from .services.file_reader import UserFile
 from .services.llm import LLMError
 
 SESSION_HISTORY_KEY = "chat_history"
@@ -32,24 +33,42 @@ def _serialize_sources(sources: list[Source]) -> list[dict]:
     ]
 
 
-def _ask(history: list[dict], user_text: str) -> dict:
+def _serialize_files(files: list[UserFile]) -> list[dict]:
+    """В историю попадают только имена и типы: сам текст нужен модели один раз,
+    в интерфейсе он больше не участвует, а сессия Django ограничена по размеру."""
+    return [{"name": f.name, "kind": f.kind} for f in files]
+
+
+def _ask(
+    history: list[dict],
+    user_text: str,
+    files: list[UserFile],
+    file_errors: list[str],
+) -> dict:
     """Задаёт вопрос модели и возвращает готовый ответ.
 
-    Вопрос добавляется в историю до обращения к модели (он нужен для поиска и
-    контекста), но при ошибке провайдера история откатывается, чтобы повторная
-    отправка того же вопроса не породила дубль.
+    При ошибке провайдера история откатывается, чтобы повторная отправка того же
+    вопроса не породила дубль.
     """
-    history.append({"role": "user", "content": user_text})
+    entry: dict = {"role": "user", "content": user_text}
+    attachments = _serialize_files(files)
+    if attachments:
+        entry["files"] = attachments
+    history.append(entry)
+
     try:
-        result = pipeline.answer(history)
+        result = pipeline.answer(history, documents=files)
     except LLMError:
         history.pop()
         raise
+
     answer = {
         "role": "assistant",
         "content": result.text,
         "sources": _serialize_sources(result.sources),
     }
+    if file_errors:
+        answer["notices"] = file_errors
     history.append(answer)
     return answer
 
@@ -64,26 +83,40 @@ def chat(request: HttpRequest) -> HttpResponse:
         {
             # Историю отдаём одним JSON-блоком: фронтенд восстанавливает по ней
             # ленту тем же кодом, которым рисует новые сообщения.
-            "history_json": json.dumps(history, ensure_ascii=False).replace("</", "<\u005c/"),
+            "history_json": json.dumps(history, ensure_ascii=False).replace("</", "<\u005c\u005c/"),
+            # Подсказка про OCR: без Tesseract текст с картинок не извлечь.
+            "ocr_ready": file_reader.ocr_available(),
         },
     )
 
 
 @require_POST
 def api_chat(request: HttpRequest) -> JsonResponse:
-    """AJAX-эндпоинт: принимает вопрос, возвращает ответ."""
-    try:
-        payload = json.loads(request.body.decode("utf-8") or "{}")
-    except ValueError:
-        return JsonResponse({"error": "Ожидался JSON."}, status=400)
+    """AJAX-эндпоинт: принимает вопрос и прикреплённые файлы, возвращает ответ.
 
-    user_text = str(payload.get("message", "")).strip()
-    if not user_text:
-        return JsonResponse({"error": "Пустой вопрос."}, status=400)
+    Запрос приходит как multipart/form-data, а не JSON: файлы в JSON не
+    передать, а держать два отдельных пути обработки смысла нет.
+    """
+    user_text = request.POST.get("message", "").strip()
+    uploads = request.FILES.getlist("files")
+
+    if not user_text and not uploads:
+        return JsonResponse(
+            {"error": "Задайте вопрос или приложите документ."}, status=400
+        )
+
+    files, file_errors = file_reader.read_uploads(uploads)
+    if uploads and not files and not user_text:
+        # Приложены только файлы, из которых не удалось прочитать текст,
+        # а вопроса нет — анализировать нечего.
+        return JsonResponse(
+            {"error": " ".join(file_errors) or "Не удалось прочитать файлы."},
+            status=400,
+        )
 
     history = _get_history(request)
     try:
-        answer = _ask(history, user_text)
+        answer = _ask(history, user_text, files, file_errors)
     except LLMError as exc:
         return JsonResponse({"error": str(exc)}, status=502)
 

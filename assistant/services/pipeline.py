@@ -11,8 +11,9 @@ from dataclasses import dataclass
 
 from . import crawler, query_expander, search
 from .crawler import Source
+from .file_reader import UserFile
 from .llm import ChatMessage, get_provider
-from .prompts import SOURCES_INSTRUCTION, SYSTEM_PROMPT
+from .prompts import DOCUMENTS_INSTRUCTION, SOURCES_INSTRUCTION, SYSTEM_PROMPT
 
 # Сколько последних сообщений отправлять модели.
 MAX_HISTORY_MESSAGES = 12
@@ -46,14 +47,30 @@ def _format_sources(sources: list[Source]) -> str:
     return "\n\n".join(blocks)
 
 
-def _build_messages(history: list[dict], sources: list[Source]) -> list[ChatMessage]:
+def _format_documents(documents: list[UserFile]) -> str:
+    """Формирует блок приложенных пользователем документов ([Д1], [Д2], ...)."""
+    return "\n\n".join(
+        f"[Д{index}] {doc.label}\n{doc.text}"
+        for index, doc in enumerate(documents, start=1)
+    )
+
+
+def _build_messages(
+    history: list[dict],
+    sources: list[Source],
+    documents: list[UserFile] | None = None,
+) -> list[ChatMessage]:
     """Собирает список сообщений для модели.
 
     GigaChat требует, чтобы системное сообщение было единственным и шло первым,
-    поэтому найденные источники приклеиваем к основному промпту, а не добавляем
-    отдельным system-сообщением.
+    поэтому найденные источники и приложенные документы приклеиваем к основному
+    промпту, а не добавляем отдельными system-сообщениями.
     """
     system_content = SYSTEM_PROMPT
+    if documents:
+        system_content += "\n\n" + DOCUMENTS_INSTRUCTION.format(
+            documents=_format_documents(documents)
+        )
     if sources:
         system_content += "\n\n" + SOURCES_INSTRUCTION.format(
             sources=_format_sources(sources)
@@ -64,19 +81,30 @@ def _build_messages(history: list[dict], sources: list[Source]) -> list[ChatMess
     return messages
 
 
-def answer(history: list[dict]) -> AssistantAnswer:
+def answer(
+    history: list[dict],
+    documents: list[UserFile] | None = None,
+) -> AssistantAnswer:
     """Готовит ответ ассистента по истории диалога.
 
     :param history: список сообщений [{'role': ..., 'content': ...}, ...],
                     последнее из которых — текущий вопрос пользователя.
+    :param documents: извлечённые тексты приложенных пользователем файлов.
     """
     # Один вопрос превращаем в несколько поисковых формулировок и ищем
     # по всем — так покрываются и норма закона, и судебная практика.
+    # Если текста вопроса нет (приложены только документы), ищем по началу
+    # первого документа, чтобы к разбору добавились актуальные нормы.
+    sources: list[Source] = []
     question = _build_search_query(history)
-    queries = query_expander.expand_query(question)
-    results = search.search_multi(queries, original_question=question)
-    sources = crawler.collect_sources(results)
+    if not question and documents:
+        question = documents[0].text[:MAX_QUERY_CHARS]
+    if question:
+        queries = query_expander.expand_query(question)
+        results = search.search_multi(queries, original_question=question)
+        sources = crawler.collect_sources(results)
 
     provider = get_provider()
-    text = provider.chat(_build_messages(history, sources))
+    text = provider.chat(_build_messages(history, sources, documents))
     return AssistantAnswer(text=text, sources=sources)
+

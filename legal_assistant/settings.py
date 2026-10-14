@@ -131,6 +131,12 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
+
+# Загрузка документов пользователем. Лимит тела запроса подобран под 4 файла
+# по 10 МБ (см. assistant/services/file_reader.py) с запасом на сам запрос.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 48 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 

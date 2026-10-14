@@ -20,7 +20,8 @@
         <div class="stage">
             <div class="chat__empty" id="empty-state">
                 <p>Привет, Евгений! Какие дела?</p>
-                <p class="chat__hint">Опишите вашу правовую ситуацию или задайте вопрос.</p>
+                <p class="chat__hint">Опишите вашу правовую ситуацию, задайте вопрос
+                    или приложите документ — договор, расчётный листок, скан постановления.</p>
             </div>
 
             <main class="chat" id="chat" hidden></main>
@@ -29,21 +30,26 @@
         </div>
 
         <form class="composer" id="composer">
+            <!-- Выбранные файлы показываются над строкой ввода и удаляются по клику. -->
+            <div class="attachments" id="attachments" hidden></div>
+            <p class="composer__notice" id="upload-notice" hidden></p>
+
             <div class="composer__row">
-                <input type="text" name="message" class="composer__input" id="input"
-                       placeholder="Спросите о праве..." autocomplete="off">
-                <div class="composer__actions">
-                    <button type="button" title="Прикрепить файл" aria-label="Прикрепить файл">📎</button>
-                    <button type="button" title="Голосовой ввод" aria-label="Голосовой ввод">🎤</button>
-                    <button type="submit" class="btn--primary btn--icon" id="send-btn"
-                            title="Отправить" aria-label="Отправить">➤</button>
-                </div>
+                <input type="file" id="file-input" class="visually-hidden" multiple
+                       accept=".pdf,.docx,.txt,.md,.rtf,.csv,.json,.html,.htm,.xml,.log,.png,.jpg,.jpeg,.gif,.bmp,.webp,.tiff">
+                <button type="button" class="composer__clip" id="clip-btn"
+                        title="Прикрепить документ или фото" aria-label="Прикрепить документ">📎</button>
+                <textarea name="message" class="composer__input" id="input" rows="1"
+                          placeholder="Спросите о праве..." autocomplete="off"></textarea>
+                <button type="submit" class="btn--primary" id="send-btn"
+                        title="Отправить" aria-label="Отправить">➤</button>
             </div>
         </form>
     </div>
 
     <!-- Старая переписка приходит с сервера и рисуется тем же кодом, что и новые сообщения. -->
     <script id="initial-history" type="application/json">{{ history_json|safe }}</script>
+    <script id="ocr-ready" type="application/json">{{ ocr_ready|yesno:"true,false" }}</script>
 
     <script src="{% static 'js/chat.js' %}"></script>
 </body>

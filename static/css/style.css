@@ -243,11 +243,11 @@ body {
 .composer__row {
     display: flex;
     gap: 6px;
-    align-items: center;
+    align-items: flex-end;
     background: var(--input-bg);
     border: 1px solid var(--border);
     border-radius: 28px;
-    padding: 6px 8px 6px 18px;
+    padding: 6px 8px 6px 12px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -267,10 +267,114 @@ body {
     background: transparent;
     color: var(--text);
     max-height: 160px;
+    overflow-y: auto;
 }
 
 .composer__input::placeholder { color: var(--text-secondary); }
 .composer__input:focus { outline: none; }
+
+/* Скрытое поле файла: клик по нему программный, от кнопки-скрепки. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Кнопка скрепки вынесена из блока кнопок: она всегда активна. */
+.composer__clip {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    font-size: 18px;
+    color: var(--text-secondary);
+    transition: background 0.15s ease, color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.composer__clip:hover {
+    background: rgba(14, 165, 233, 0.12);
+    color: var(--accent);
+}
+
+.composer__clip:disabled {
+    opacity: 0.5;
+    cursor: default;
+    background: none;
+    color: var(--text-secondary);
+}
+
+/* ===== Прикреплённые файлы ===== */
+.attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 6px 8px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    padding: 6px 8px 6px 12px;
+    border-radius: 16px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text);
+}
+
+.chip__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 220px;
+}
+
+.chip__size { color: var(--text-secondary); flex-shrink: 0; }
+
+.chip__remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 50%;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--text-secondary);
+}
+
+.chip__remove:hover { color: #a1231f; }
+
+/* Вложения внутри сообщения: только имя и тип, без кнопки удаления. */
+.attachments--static { padding: 8px 0 0; }
+
+.attachments--static .chip { background: var(--input-bg); }
+
+.composer__notice {
+    margin: 0 6px 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Предупреждения об отдельных файлах под ответом ассистента. */
+.notices {
+    max-width: 78%;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
 
 /* ===== Кнопки-иконки в строке ввода ===== */
 .composer__actions {

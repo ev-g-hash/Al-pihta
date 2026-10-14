@@ -3,3 +3,10 @@ requests>=2.31
 python-dotenv>=1.0
 ddgs>=9.0
 trafilatura>=2.0
+pypdf>=5.0
+python-docx>=1.1
+# Распознавание текста на изображениях (OCR). Работает только при установленном
+# Tesseract OCR (https://github.com/UB-Mannheim/tesseract/wiki). Без него
+# картинки принимаются, но текст из них не извлекается.
+pytesseract>=0.3.13
+Pillow>=10.0
