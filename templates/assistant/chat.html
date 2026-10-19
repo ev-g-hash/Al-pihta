@@ -4,24 +4,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ИИ-помощник юриста</title>
+    <title>ИИ-помощник</title>
     <link rel="stylesheet" href="{% static 'css/style.css' %}?v={{ STATIC_VERSION }}">
 </head>
 <body>
     <div class="app">
         <header class="app-header">
             <div class="app-header__title">
-                <h1>ИИ-помощник юриста</h1>
-                <p class="app-header__subtitle">Право Российской Федерации · справочная информация</p>
+                <h1>ИИ-Евгеша</h1>
+                <p class="app-header__subtitle">Самый лучший помощник в мире</p>
             </div>
-            <button type="button" id="clear-btn" class="btn--ghost" hidden>Очистить</button>
+            <div class="app-header__actions">
+                <a type="button" id="export-btn" class="btn--ghost" href="/api/export/"
+                   download="perepiska.txt" hidden>Сохранить</a>
+                <button type="button" id="clear-btn" class="btn--ghost" hidden>Очистить</button>
+            </div>
         </header>
 
         <div class="stage">
             <div class="chat__empty" id="empty-state">
                 <p>Привет, Евгений! Какие дела?</p>
-                <p class="chat__hint">Опишите вашу правовую ситуацию, задайте вопрос
-                    или приложите документ — договор, расчётный листок, скан постановления.</p>
+                <p class="chat__hint">Опишите вашу ситуацию, задайте вопрос
+                    или приложите документ.</p>
             </div>
 
             <main class="chat" id="chat" hidden></main>
@@ -40,7 +44,7 @@
                 <button type="button" class="composer__clip" id="clip-btn"
                         title="Прикрепить документ или фото" aria-label="Прикрепить документ">📎</button>
                 <textarea name="message" class="composer__input" id="input" rows="1"
-                          placeholder="Спросите о праве..." autocomplete="off"></textarea>
+                          placeholder="Задать вопрос" autocomplete="off"></textarea>
                 <button type="submit" class="btn--primary" id="send-btn"
                         title="Отправить" aria-label="Отправить">➤</button>
             </div>

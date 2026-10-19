@@ -83,6 +83,21 @@ body {
     color: var(--text);
 }
 
+/* Кнопки в шапке: «Сохранить» — ссылка, «Очистить» — кнопка. Держим их в
+   строке и одинаково оформляем, поэтому ссылке убираем подчёркивание. */
+.app-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+a.btn--ghost {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.4;
+}
+
 /* ===== Сцена: область между шапкой и полем ввода ===== */
 .stage {
     position: relative;
@@ -428,56 +443,91 @@ body {
 
 .btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
 
-/* ===== Источники ===== */
-.sources {
+/* ===== Таблица расчёта =====
+   Содержимое рисует шаблон Django, классы здесь соответствуют разметке
+   templates/assistant/widgets/calc_table.html. */
+.message__table {
     max-width: 78%;
     margin-top: 8px;
+    width: 100%;
+}
+
+.calc {
     background: #ffffff;
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 10px 14px;
+    padding: 12px 14px;
+}
+
+.calc__title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.calc__table {
+    width: 100%;
+    border-collapse: collapse;
     font-size: 13px;
 }
 
-.sources__title {
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin-bottom: 6px;
+.calc__row + .calc__row .calc__label,
+.calc__row + .calc__row .calc__value,
+.calc__row + .calc__row .calc__comment {
+    border-top: 1px solid var(--border);
 }
 
-.sources__list {
-    margin: 0;
-    padding-left: 0;
-    list-style: none;
+.calc__label {
+    text-align: left;
+    font-weight: 400;
+    color: var(--text-secondary);
+    padding: 7px 10px 7px 0;
+    width: 42%;
+}
+
+.calc__value {
+    text-align: right;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    padding: 7px 10px;
+    width: 24%;
+}
+
+.calc__comment {
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 7px 0;
+    vertical-align: top;
+}
+
+.calc__conclusion {
+    margin: 10px 0 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+}
+
+.calc__norms {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    font-size: 12px;
+    color: var(--text-secondary);
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 2px;
 }
 
-.sources__item {
-    display: flex;
-    gap: 6px;
-    line-height: 1.4;
+@media (max-width: 600px) {
+    .message__table { max-width: 92%; }
+    .calc__comment { display: none; }
+    .calc__label { width: 55%; }
+    .calc__value { width: 45%; }
 }
-
-.sources__num {
-    color: var(--accent);
-    font-weight: 600;
-    flex-shrink: 0;
-}
-
-.sources__item a {
-    color: var(--accent);
-    text-decoration: none;
-    overflow-wrap: break-word;
-}
-
-.sources__item a:hover { text-decoration: underline; }
 
 /* ===== Адаптив ===== */
 @media (max-width: 600px) {
     .app { padding: 8px; gap: 8px; }
     .chat__empty p:first-child { font-size: 22px; }
-    .message__bubble,
-    .sources { max-width: 92%; }
+    .message__bubble { max-width: 92%; }
 }

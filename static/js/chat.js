@@ -14,6 +14,7 @@
     var input = document.getElementById('input');
     var sendBtn = document.getElementById('send-btn');
     var clearBtn = document.getElementById('clear-btn');
+    var exportBtn = document.getElementById('export-btn');
     var scrollDownBtn = document.getElementById('scroll-down');
     var fileInput = document.getElementById('file-input');
     var clipBtn = document.getElementById('clip-btn');
@@ -172,8 +173,14 @@
             wrapper.appendChild(createAttachmentsList(options.files));
         }
 
-        if (options.sources && options.sources.length) {
-            wrapper.appendChild(createSources(options.sources));
+        if (options.tableHtml) {
+            var tableBox = document.createElement('div');
+            tableBox.className = 'message__table';
+            // innerHTML здесь единственный допустимый случай: строку собрал
+            // шаблон Django из проверенных данных (см. calculations.py), а не
+            // модель. Текст модели в интерфейс всегда идёт через textContent.
+            tableBox.innerHTML = options.tableHtml;
+            wrapper.appendChild(tableBox);
         }
 
         if (options.notices && options.notices.length) {
@@ -188,41 +195,6 @@
         }
 
         return wrapper;
-    }
-
-    function createSources(sources) {
-        var sourcesDiv = document.createElement('div');
-        sourcesDiv.className = 'sources';
-
-        var title = document.createElement('div');
-        title.className = 'sources__title';
-        title.textContent = 'Источники:';
-        sourcesDiv.appendChild(title);
-
-        var list = document.createElement('ul');
-        list.className = 'sources__list';
-
-        sources.forEach(function (src) {
-            var li = document.createElement('li');
-            li.className = 'sources__item';
-
-            var num = document.createElement('span');
-            num.className = 'sources__num';
-            num.textContent = '[' + src.number + ']';
-
-            var a = document.createElement('a');
-            a.href = src.url;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            a.textContent = src.title;
-
-            li.appendChild(num);
-            li.appendChild(a);
-            list.appendChild(li);
-        });
-
-        sourcesDiv.appendChild(list);
-        return sourcesDiv;
     }
 
     function createTypingIndicator() {
@@ -270,6 +242,7 @@
         emptyState.hidden = true;
         chat.hidden = false;
         clearBtn.hidden = false;
+        exportBtn.hidden = false;
     }
 
     /* ───────── Высота поля ввода ───────── */
@@ -335,8 +308,8 @@
                     data.answer.role,
                     data.answer.content,
                     {
-                        sources: data.answer.sources || [],
-                        notices: data.answer.notices || []
+                        notices: data.answer.notices || [],
+                        tableHtml: data.answer.table_html || ''
                     }
                 ));
             }
@@ -377,6 +350,7 @@
             chat.hidden = true;
             emptyState.hidden = false;
             clearBtn.hidden = true;
+            exportBtn.hidden = true;
             scrollDownBtn.hidden = true;
             pendingFiles = [];
             renderAttachments();
@@ -403,8 +377,8 @@
         history.forEach(function (msg) {
             chat.appendChild(createMessage(msg.role, msg.content, {
                 files: msg.files || [],
-                sources: msg.sources || [],
-                notices: msg.notices || []
+                notices: msg.notices || [],
+                tableHtml: msg.table_html || ''
             }));
         });
         requestAnimationFrame(scrollToBottom);

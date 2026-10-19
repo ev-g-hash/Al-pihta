@@ -7,6 +7,7 @@ LLM (llm.py). Логика поиска живёт в коде, а не отда
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from . import crawler, query_expander, search
@@ -19,6 +20,51 @@ from .prompts import DOCUMENTS_INSTRUCTION, SOURCES_INSTRUCTION, SYSTEM_PROMPT
 MAX_HISTORY_MESSAGES = 12
 # Максимальная длина поискового запроса (берём последний вопрос пользователя).
 MAX_QUERY_CHARS = 400
+
+# GigaChat иногда вставляет LaTeX-оформление: числа в долларах и команды с
+# обратным слэшем. Запрет в промпте помогает не всегда, поэтому чиним в коде:
+# интерфейс показывает обычный текст, формулы в нём выглядят мусором.
+# Обратный слэш берём из константы: литералы с ним неудобны и легко портятся.
+BACKSLASH = "\u005c"
+BS = BACKSLASH * 2  # в регулярке два слэша матчат один настоящий слэш
+_MATH_SPAN_RE = re.compile(r"\$([^$]{1,120})\$")
+_PAREN_MATH_RE = re.compile(BS + "[(](.+?)" + BS + "[)]")
+_MATH_COMMAND_RE = re.compile(BS + "[,;:!]|" + BS + "[a-zA-Z]+|[{}]")
+
+
+# Ссылки вида [1], [4], [Д2] на найденные материалы. Пользователь их список не
+# видит, поэтому в тексте ответа они бессмысленны. Запрет в промпте помогает не
+# всегда, поэтому маркеры убираем в коде.
+_CITATION_WITH_PUNCT_RE = re.compile(r"\s*[:;,]\s*\[(?:\d+|[ДD]\d+)\]")
+_CITATION_RE = re.compile(r"\s*\[(?:\d+|[ДD]\d+)\]")
+
+
+def clean_answer_markup(text: str) -> str:
+    """Приводит ответ модели к виду обычной переписки.
+
+    Убирает LaTeX-вкрапления и сноски на источники: интерфейс показывает
+    простой текст, и то и другое выглядит в нём мусором.
+    """
+    if not text:
+        return text
+
+    if "$" in text or BACKSLASH in text:
+        def _plain(span: re.Match) -> str:
+            inner = _MATH_COMMAND_RE.sub(" ", span.group(1))
+            return " ".join(inner.split())
+
+        text = _PAREN_MATH_RE.sub(_plain, text)
+        text = _MATH_SPAN_RE.sub(_plain, text)
+        text = re.sub(BS + "[,;]", " ", text)
+
+    # «найти здесь: [4].» → «найти здесь.», «согласно [1] норме» → «согласно норме»
+    text = _CITATION_WITH_PUNCT_RE.sub("", text)
+    text = _CITATION_RE.sub("", text)
+
+    # После вычёркивания ссылки могла остаться сдвоенная точка («См..»);
+    # многоточие не трогаем.
+    text = re.sub(r"(?<!\.)\.\.(?!\.)", ".", text)
+    return re.sub(" {2,}", " ", text)
 
 
 @dataclass
@@ -53,6 +99,38 @@ def _format_documents(documents: list[UserFile]) -> str:
         f"[Д{index}] {doc.label}\n{doc.text}"
         for index, doc in enumerate(documents, start=1)
     )
+
+
+def _documents_from_history(history: list[dict]) -> list[UserFile]:
+    """Восстанавливает приложенные документы из истории диалога.
+
+    Нужен именно этот шаг, потому что текст файла модель видит только в том
+    сообщении, к которому файл приложен. Без восстановления уточняющий вопрос
+    «а что в пункте 5 этого договора?» оставался бы без самого договора.
+
+    Берём последний набор вложений: более старые документы в разборе уже
+    не участвуют, иначе контекст разрастался бы до бесконечности.
+    """
+    for item in reversed(history):
+        if item.get("role") != "user":
+            continue
+        stored = item.get("files") or []
+        documents = [
+            UserFile(
+                name=entry.get("name", ""),
+                kind=entry.get("kind", "text"),
+                text=entry.get("text", ""),
+            )
+            for entry in stored
+            if entry.get("text")
+        ]
+        if documents:
+            return documents
+        # Сообщения пользователя без вложений пропускаем, но как только
+        # встретили сообщение с вложениями без текста — дальше не идём.
+        if stored:
+            return []
+    return []
 
 
 def _build_messages(
@@ -104,7 +182,11 @@ def answer(
         results = search.search_multi(queries, original_question=question)
         sources = crawler.collect_sources(results)
 
+    # Если в этом сообщении файлов нет, берём последний приложенный ранее:
+    # иначе модель «забывала» документ между сообщениями.
+    documents = documents or _documents_from_history(history)
+
     provider = get_provider()
-    text = provider.chat(_build_messages(history, sources, documents))
+    text = clean_answer_markup(provider.chat(_build_messages(history, sources, documents)))
     return AssistantAnswer(text=text, sources=sources)
 

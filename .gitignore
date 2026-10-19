@@ -14,6 +14,12 @@ db.sqlite3-journal
 /staticfiles/
 /media/
 
+# Логи
+*.log
+
+# Локальные бинарные данные (Tesseract tessdata и пр.)
+tools/
+
 # Редакторы
 .vscode/
 .idea/

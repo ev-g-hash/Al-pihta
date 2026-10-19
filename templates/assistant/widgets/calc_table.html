@@ -1,0 +1,30 @@
+{# Таблица числового расчёта. #}
+{# Данные приходят уже проверенными в calculations.py и экранируются шаблоном, #}
+{# поэтому текст модели не может превратиться в разметку. #}
+<div class="calc">
+    <div class="calc__title">{{ calc.title }}</div>
+
+    <table class="calc__table">
+        <tbody>
+        {% for row in calc.rows %}
+            <tr class="calc__row">
+                <th class="calc__label" scope="row">{{ row.label }}</th>
+                <td class="calc__value">{{ row.value }}</td>
+                <td class="calc__comment">{{ row.comment }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% if calc.conclusion %}
+        <p class="calc__conclusion">{{ calc.conclusion }}</p>
+    {% endif %}
+
+    {% if calc.norms %}
+        <ul class="calc__norms">
+            {% for norm in calc.norms %}
+                <li>{{ norm }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</div>

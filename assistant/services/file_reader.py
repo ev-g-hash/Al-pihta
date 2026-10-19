@@ -15,8 +15,10 @@ from __future__ import annotations
 import codecs
 import io
 import logging
+import os
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,14 @@ SCANNED_PDF_NOTICE = (
     "(в PDF нет текстового слоя — это скан или фото; распознавание недоступно: "
     "OCR-движок Tesseract не установлен)"
 )
+SCANNED_PDF_NO_OCR_NOTICE = (
+    "(в PDF нет текстового слоя, и распознавание по картинке не дало результата — "
+    "страницы могут быть пустыми или слишком низкого качества)"
+)
+# Скан-страниц распознаём за один раз: OCR на процессоре медленный.
+MAX_OCR_PDF_PAGES = 6
+# Если текстового слоя почти нет, считаем PDF скан-копией.
+MIN_SCANNED_PDF_CHARS = 40
 
 
 @dataclass
@@ -77,24 +87,96 @@ def detect_kind(filename: str) -> str | None:
     return None
 
 
+# Возможные места установки Tesseract на Windows: ищем сами, потому что
+# установщик не всегда прописывает каталог в PATH. Пути собираем из
+# переменных окружения — на разных машинах каталог программ может отличаться.
+TESSERACT_SUBPATH = ("Tesseract-OCR", "tesseract.exe")
+
+
+def _candidate_paths() -> list[str]:
+    roots = [
+        os.environ.get("ProgramFiles", ""),
+        os.environ.get("ProgramFiles(x86)", ""),
+        os.environ.get("ProgramW6432", ""),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs"),
+    ]
+    return [
+        os.path.join(root, *TESSERACT_SUBPATH)
+        for root in roots
+        if root
+    ]
+
+
+# Языковые данные могут лежать в самом проекте (тогда не нужны права
+# администратора на запись в Program Files).
+PROJECT_TESSDATA = Path(__file__).resolve().parents[2] / "tools" / "tessdata"
+
+
+def tesseract_cmd() -> str | None:
+    """Возвращает путь к tesseract.exe или None, если движок не найден."""
+    # Переменная окружения даёт возможность указать путь вручную.
+    configured = os.getenv("TESSERACT_CMD", "").strip()
+    if configured and os.path.exists(configured):
+        return configured
+
+    found = shutil.which("tesseract")
+    if found:
+        return found
+
+    for candidate in _candidate_paths():
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+def tessdata_dir() -> str | None:
+    """Каталог с языковыми данными проекта, если в нём есть русский пакет."""
+    if (PROJECT_TESSDATA / "rus.traineddata").exists():
+        return str(PROJECT_TESSDATA)
+    return None
+
+
 def ocr_available() -> bool:
     """Проверяет, доступен ли Tesseract (нужен только для распознавания картинок)."""
-    if shutil.which("tesseract"):
-        return True
-    try:
-        import os
+    return tesseract_cmd() is not None
 
-        import pytesseract
 
-        return bool(pytesseract.tesseract_cmd) and os.path.exists(
-            pytesseract.tesseract_cmd
-        )
-    except Exception:
-        return False
+class MissingDependency(Exception):
+    """Не установлена библиотека, нужная для чтения конкретного формата.
+
+    Отдельный тип нужен, чтобы не сообщать пользователю про «повреждённый
+    файл», когда файл на самом деле целый, а программе просто чем его читать.
+    """
+
+
+def _ocr_pdf_images(reader) -> str:
+    """Распознаёт скан-копию: страницы PDF как картинки через Tesseract.
+
+    Страниц может быть много, а OCR на процессоре не быстрый, поэтому
+    распознаём не более MAX_OCR_PDF_PAGES первых страниц.
+    """
+    pages_text = []
+    for page in list(reader.pages)[:MAX_OCR_PDF_PAGES]:
+        try:
+            images = list(page.images)
+        except Exception as exc:
+            logger.info("Не удалось достать картинки страницы PDF: %s", exc)
+            continue
+        for image in images:
+            text = _read_image(image.data)
+            if text and not text.startswith("("):
+                pages_text.append(text)
+    return "\n".join(pages_text).strip()
 
 
 def _read_pdf(data: bytes) -> str:
-    from pypdf import PdfReader
+    try:
+        from pypdf import PdfReader
+    except ImportError as exc:
+        raise MissingDependency(
+            "Не установлена библиотека pypdf. Установите зависимости: "
+            "pip install -r requirements.txt"
+        ) from exc
 
     reader = PdfReader(io.BytesIO(data))
     pages = []
@@ -106,15 +188,23 @@ def _read_pdf(data: bytes) -> str:
             pages.append("")
     text = "\n".join(pages).strip()
     # Скан-копии и фото документов, сохранённые в PDF, не содержат текстового
-    # слоя: pypdf возвращает пустоту. Без объяснения это выглядело бы как
-    # «файл не читается», поэтому различаем эти случаи явно.
-    if not text:
-        return SCANNED_PDF_NOTICE if not ocr_available() else EMPTY_TEXT_NOTICE
+    # слоя: pypdf возвращает пустоту. Если есть Tesseract — распознаём
+    # страницы как картинки, иначе объясняем пользователю причину явно.
+    if len(text) < MIN_SCANNED_PDF_CHARS:
+        if ocr_available():
+            return _ocr_pdf_images(reader) or SCANNED_PDF_NO_OCR_NOTICE
+        return SCANNED_PDF_NOTICE
     return text
 
 
 def _read_docx(data: bytes) -> str:
-    import docx
+    try:
+        import docx
+    except ImportError as exc:
+        raise MissingDependency(
+            "Не установлена библиотека python-docx. Установите зависимости: "
+            "pip install -r requirements.txt"
+        ) from exc
 
     document = docx.Document(io.BytesIO(data))
     parts = [paragraph.text for paragraph in document.paragraphs]
@@ -156,21 +246,45 @@ def _read_text(data: bytes) -> str:
 
 
 def _read_image(data: bytes) -> str:
-    if not ocr_available():
+    cmd = tesseract_cmd()
+    if not cmd:
         return OCR_UNAVAILABLE_NOTICE
     try:
         import pytesseract
         from PIL import Image
+    except ImportError as exc:
+        raise MissingDependency(
+            "Не установлены библиотеки pytesseract/Pillow. Установите зависимости: "
+            "pip install -r requirements.txt"
+        ) from exc
 
-        image = Image.open(io.BytesIO(data))
-        # Русское+английское распознавание; если языковой пакет rus не установлен,
-        # Tesseract падает — тогда пробуем только английский.
-        for languages in ("rus+eng", "eng"):
-            try:
-                return pytesseract.image_to_string(image, lang=languages)
-            except pytesseract.TesseractError:
-                continue
+    try:
+        pytesseract.pytesseract.tesseract_cmd = cmd
+        tessdata = tessdata_dir()
+
+        # Языковые данные проекта передаём через переменную окружения: вариант
+        # с ключом --tessdata-dir не подходит, потому что pytesseract 0.3.x
+        # оставляет кавычки внутри пути, а в пути есть пробелы.
+        previous_prefix = os.environ.get("TESSDATA_PREFIX")
+        if tessdata:
+            os.environ["TESSDATA_PREFIX"] = tessdata
+        try:
+            image = Image.open(io.BytesIO(data))
+            # Русское+английское распознавание; если языковой пакет rus не установлен,
+            # Tesseract падает — тогда пробуем только английский.
+            for languages in ("rus+eng", "eng"):
+                try:
+                    return pytesseract.image_to_string(image, lang=languages)
+                except pytesseract.TesseractError:
+                    continue
+        finally:
+            if previous_prefix is None:
+                os.environ.pop("TESSDATA_PREFIX", None)
+            else:
+                os.environ["TESSDATA_PREFIX"] = previous_prefix
         return EMPTY_TEXT_NOTICE
+    except MissingDependency as exc:
+        return str(exc)
     except Exception as exc:
         logger.info("Не удалось распознать изображение: %s", exc)
         return EMPTY_TEXT_NOTICE
@@ -192,6 +306,10 @@ def extract_text(upload, name: str, kind: str) -> str:
         if len(data) > MAX_FILE_BYTES:
             return "(файл слишком большой, содержимое не прочитано)"
         text = READERS[kind](data)
+    except MissingDependency as exc:
+        # Не «файл плохой», а нечем читать: сообщаем причину прямо.
+        logger.info("Не хватает зависимости для файла %s: %s", name, exc)
+        return f"({exc})"
     except Exception as exc:
         logger.info("Не удалось прочитать файл %s: %s", name, exc)
         return "(файл повреждён или имеет нестандартный формат, текст не извлечён)"
